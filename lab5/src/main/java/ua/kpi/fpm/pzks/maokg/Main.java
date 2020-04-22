@@ -36,16 +36,19 @@ public class Main extends JFrame implements ActionListener, KeyListener {
     private final ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
     private SimpleUniverse universe;
     private Scene tram;
+    private Background background;
     private Map<String, Shape3D> nameMap;
-
     private float x_eye_loc = -3.985f;
     private float y_eye_loc = -0.07f;
     private float z_eye_loc = 1.635f;
-
     private float angle_eye = 0;
-    private boolean in_depot = true;
-
-    private Background background;
+    private boolean inDepot = true;
+    private float y_loc_cur = -0.7f;
+    private float x_loc_cur = 0;
+    private int count_iter = 1;
+    private float angle_rotate_cur = (float) Math.PI;
+    private float scale_cur = 2;
+    private float speed_cur = 0.005f;
 
     public static void main(String[] args) {
         try {
@@ -64,10 +67,10 @@ public class Main extends JFrame implements ActionListener, KeyListener {
         addModelToUniverse();
         setTramElementsList();
         addAppearance();
-        addImageBackground(depotBackgroundLocation);
+        addImageBackground();
         addLightToUniverse();
         addOtherLight();
-        changeViewAngle();
+        changeViewAngle(0);
         root.compile();
         universe.addBranchGraph(root);
         configureFrame();
@@ -108,7 +111,7 @@ public class Main extends JFrame implements ActionListener, KeyListener {
     }
 
     private void addModelToUniverse() throws IOException {
-        tram = getSceneFromFile(tramModelLocation);
+        tram = getSceneFromFile();
     }
 
     private void addLightToUniverse() {
@@ -143,8 +146,8 @@ public class Main extends JFrame implements ActionListener, KeyListener {
         return new TextureLoader(textureResource.getPath(), canvas);
     }
 
-    private Texture getTexture(String path) throws IOException {
-        var texture = getTextureLoader(path).getTexture();
+    private Texture getTexture() throws IOException {
+        var texture = getTextureLoader(tramTextureLocation).getTexture();
         texture.setBoundaryModeS(Texture.WRAP);
         texture.setBoundaryModeT(Texture.WRAP);
         texture.setBoundaryColor(new Color4f(1.0f, 1.0f, 1.0f, 1.0f ));
@@ -162,7 +165,7 @@ public class Main extends JFrame implements ActionListener, KeyListener {
 
     private void addAppearance() throws IOException {
         var tramAppearance = new Appearance();
-        tramAppearance.setTexture(getTexture(tramTextureLocation));
+        tramAppearance.setTexture(getTexture());
         var texAttr = new TextureAttributes();
         texAttr.setTextureMode(TextureAttributes.MODULATE);
         tramAppearance.setTextureAttributes(texAttr);
@@ -171,22 +174,12 @@ public class Main extends JFrame implements ActionListener, KeyListener {
         plane.setAppearance(tramAppearance);
     }
 
-    private void addImageBackground(String path) throws IOException {
-        background = new Background(getTextureLoader(path).getImage());
+    private void addImageBackground() throws IOException {
+        background = new Background(getTextureLoader(depotBackgroundLocation).getImage());
         background.setImageScaleMode(Background.SCALE_FIT_MAX);
         background.setApplicationBounds(new BoundingSphere(new Point3d(),1000));
         background.setCapability(Background.ALLOW_IMAGE_WRITE);
         root.addChild(background);
-    }
-
-    private void changeViewAngle() {
-        changeViewAngle(0);
-    }
-
-    private void setDepotEyeLocation() {
-        x_eye_loc = -3.985f;
-        y_eye_loc = -0.07f;
-        z_eye_loc = 1.635f;
     }
 
     private void changeViewAngle(float angle) {
@@ -214,24 +207,21 @@ public class Main extends JFrame implements ActionListener, KeyListener {
         root.addChild(directionalLight);
     }
 
-    private Scene getSceneFromFile(String location) throws IOException {
+    private Scene getSceneFromFile() throws IOException {
         ObjectFile file = new ObjectFile(ObjectFile.RESIZE);
         file.setFlags(ObjectFile.RESIZE | ObjectFile.TRIANGULATE | ObjectFile.STRIPIFY);
-        var inputStream = classLoader.getResourceAsStream(location);
+        var inputStream = classLoader.getResourceAsStream(tramModelLocation);
         if (inputStream == null) {
-            throw new IOException("Resource " + location + " not found");
+            throw new IOException("Resource " + tramModelLocation + " not found");
         }
         return file.load(new BufferedReader(new InputStreamReader(inputStream)));
     }
-
-    private float x_temp = 0;
-    private float y_temp = 0;
 
     @Override
     public void keyPressed(KeyEvent e) {
         int keyCode = e.getKeyCode();
         float diff = 0.05f;
-        if (in_depot) {
+        if (inDepot) {
             switch (keyCode) {
                 case KeyEvent.VK_LEFT:
                 case KeyEvent.VK_RIGHT: {
@@ -267,47 +257,23 @@ public class Main extends JFrame implements ActionListener, KeyListener {
                 }
             }
         } else {
-            if (e.getKeyChar() == '1') {
-                x_eye_loc += 0.01;
-            }
-            if (e.getKeyChar() == '2') {
-                x_eye_loc -= 0.01;
-            }
-            if (e.getKeyChar() == '3') {
-                y_eye_loc += 0.01;
-            }
-            if (e.getKeyChar() == '4') {
-                y_eye_loc -= 0.01;
-            }
-            if (e.getKeyChar() == '5') {
-                z_eye_loc += 0.01;
-            }
-            if (e.getKeyChar() == '6') {
-                z_eye_loc -= 0.01;
-            }
-            changeViewAngle();
-            if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
-                y_temp += 0.01;
-            }
-            if (e.getKeyCode() == KeyEvent.VK_LEFT) {
-                y_temp -= 0.01;
-            }
-            if (e.getKeyCode() == KeyEvent.VK_UP) {
-                x_temp += 0.01;
-            }
-            if (e.getKeyCode() == KeyEvent.VK_DOWN) {
-                x_temp -= 0.01;
-            }
-
-            transform3D.setTranslation(new Vector3f(x_temp, 0, y_temp));
-
-           // wholeTram.setTransform(transform3D);
-
-            if (e.getKeyCode() == KeyEvent.VK_SPACE && !in_depot) {
-                if (timer.isRunning()) {
-                    timer.stop();
-                } else {
-                    timer.start();
+            switch (keyCode) {
+                case KeyEvent.VK_UP:
+                case KeyEvent.VK_DOWN: {
+                    diff *= 0.1;
+                    if (keyCode == KeyEvent.VK_DOWN) {
+                        diff *= -1;
+                    }
+                    if (speed_cur + diff > 0 && speed_cur + diff < 1) {
+                        speed_cur += diff;
+                    }
+                } break;
+                case KeyEvent.VK_SPACE: {
+                    if (timer.isRunning()) {
+                        timer.stop();
+                    } else {
+                        timer.start();
+                    }
                 }
             }
         }
@@ -319,57 +285,44 @@ public class Main extends JFrame implements ActionListener, KeyListener {
     @Override
     public void keyTyped(KeyEvent e) { }
 
-    private boolean y = false;
-    float y_loc_cur = -0.7f;
-    int count_ = 1;
-
     @Override
     public void actionPerformed(ActionEvent e) {
         if (e.getSource() == go) {
-            if (in_depot && !timer.isRunning()) {
+            if (inDepot && !timer.isRunning()) {
                 timer.start();
                 go.setEnabled(false);
-                //go.setLabel("Stop");
             } else {
                 timer.stop();
-                //go.setLabel("Go");
             }
         } else {
-            if (in_depot) {
+            if (inDepot) {
                 moveTramToGoOnRoute();
-                return;
             } else {
-                //transform3D.setIdentity();
-                transform3D.setTranslation(new Vector3f(8.04f - x_loc_cur, -0.03f + -0.66f, -0.5f + y_loc_cur));
+                transform3D.setTranslation(new Vector3f(8.04f - x_loc_cur, -0.69f, -0.5f + y_loc_cur));
                 transform3D.setScale(scale_cur);
                 wholeTram.setTransform(transform3D);
-                if (!y) {
-                    x_loc_cur += 0.005 + 0.003 * Math.pow(1.01, count_);
-                    scale_cur += 0.025;
-                    y_loc_cur += 0.015;
-                    count_++;
+                x_loc_cur += speed_cur + 0.003 * Math.pow(1.01, count_iter);
+                if (scale_cur < 10) {
+                    scale_cur += Math.pow(speed_cur, 2) * 0.1 + 0.025;
                 }
+                y_loc_cur += 0.015;
+                count_iter++;
                 if (x_loc_cur > 30) {
                     x_loc_cur = 0;
                     scale_cur = 0.7f;
                     y_loc_cur = -0.7f;
-                    count_ = 1;
+                    count_iter = 1;
                 }
-                //y = true;
             }
         }
     }
 
-    private float y_angle = (float) Math.PI;
-    private float x_loc_cur = 0;
-    private float scale_cur = 2;
-
     private void moveTramToGoOnRoute() {
-        if (y_angle > 0) {
+        if (angle_rotate_cur > 0) {
             rotateTransformY.rotY(-0.01);
             transform3D.mul(rotateTransformY);
             wholeTram.setTransform(transform3D);
-            y_angle -= 0.01;
+            angle_rotate_cur -= 0.01;
         } else if (scale_cur > 1.5) {
             transform3D.setTranslation(new Vector3f(x_loc_cur, 0, 0));
             transform3D.setScale(scale_cur);
@@ -377,7 +330,7 @@ public class Main extends JFrame implements ActionListener, KeyListener {
             x_loc_cur += 0.01;
             scale_cur -= 0.001;
         } else {
-            in_depot = false;
+            inDepot = false;
             timer.stop();
             prepareSceneForStation();
             timer.start();
@@ -396,6 +349,9 @@ public class Main extends JFrame implements ActionListener, KeyListener {
             y_eye_loc = -0.09f;
             z_eye_loc = -2.945f;
             changeViewAngle(0);
+            go.getParent().remove(go);
+            labelInfo.setText("To stop tram on the station and then resume movement press `space`. " +
+                    "To inc. or dec. speed use `↑` and `↓`");
         } catch (IOException e) {
             e.printStackTrace();
             System.exit(1);
